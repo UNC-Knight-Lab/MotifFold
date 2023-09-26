@@ -1,4 +1,4 @@
-from .motif_fold import seq_analysis
+from .motif_fold import motif_fold
 import os
 import argparse
 import numpy
@@ -23,4 +23,4 @@ def main():
         input_folder = args.i
 
     # Call sequence matching function
-    seq_analysis(input_folder)
+    motif_fold(input_folder)

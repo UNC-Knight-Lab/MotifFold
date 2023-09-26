@@ -10,7 +10,7 @@ import seaborn as sns
 import glob
 
 
-def seq_analysis(folder):
+def motif_fold(folder):
     all_seqs, seqs, num_seqs = read_lib_from_file(folder)
     PCA_y = PCA_reduction(all_seqs)
 

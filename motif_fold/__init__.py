@@ -1,1 +1,1 @@
-from .motif_fold import seq_analysis
+from .motif_fold import motif_fold
