@@ -28,7 +28,7 @@ This tool can be run as a Python function or from the command line terminal. The
 
 ### To run from terminal:
 
-    motif-fold -i "/path/to/input_folder"
+    motif_fold -i "/path/to/input_folder"
     
 Instead of specifying an input or output folder, you can also navigate to your data input folder in the terminal and run the script.
 The current working directory will be used as default.
@@ -36,6 +36,6 @@ Use the help `-h` tag to see more options.
 
 ### To run in Python:
 
-    from motif-fold import motif-fold
-    motif-fold(input_folder)
+    from motif_fold import motif_fold
+    motif_fold(input_folder)
 
