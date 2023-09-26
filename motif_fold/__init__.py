@@ -1,0 +1,1 @@
+from .motif_fold import seq_analysis

@@ -6,7 +6,7 @@ LONG_DESCRIPTION = 'My first Python package with a slightly longer description'
 
 # Setting up
 setup(
-    name="seq_match",
+    name="motif-fold",
     version=VERSION,
     author="Supraja Chittari",
     author_email="suprajac@email.unc.edu",
@@ -23,7 +23,7 @@ setup(
         'category_encoders'
     ],
     entry_points={
-        'console_scripts': ['motif-fold=motif-fold.command_line:main'],
+        'console_scripts': ['motif_fold=motif_fold.command_line:main'],
     },
     classifiers=[
         'Intended Audience :: Science/Research',
@@ -31,5 +31,5 @@ setup(
         'Operating System :: OS Independent',
         'Programming Language :: Python :: 3.7',
     ],
-    license='GPL-3.0'
+    license='MIT'
 )
