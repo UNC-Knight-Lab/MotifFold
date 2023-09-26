@@ -21,10 +21,9 @@ A version of Python >= 3.7 is required to use this package. We recommend using [
 That's it!
 
 ## How to use
-This tool can be run as a Python function or from the command line terminal. The tools will prompt for user input. Sample data is included for both parts of this script. 
+This tool can be run as a Python function or from the command line terminal. Sample data is provided in the correct file layout and format and must be ending in "_library.xlsx". The code will read in sequences from this file and then prompt for user input, including the number of boostrapping iterations and motif length. Unknown sequences to be predicted on can be provided in a separate file ending in "_unknown.xlsx". Output items from this script include a table with statistics on predictions and goodness-of-fit visualized as box plots.
 
-### Sequence quantification
-
+For more information on this tool, we invite you to reference the following publication:
 
 ### To run from terminal:
 
