@@ -1,7 +1,7 @@
 # MotifFold
 
 ## Description
-This Python package was developed by the Knight Lab at UNC Chapel Hill to regress sequence features against a colorimetric assay. It consists of two parts, an image quantification section that returns RGB values of selected beads, and a second will classify lists of RGB values into groups based on pre-classified test data.
+This Python package was developed by the Knight Lab at UNC Chapel Hill to regress sequence features against an output from a colorimetric assay. It uses a language-inspired "motif" strategy, where sequences are separated into motif features and then regressed using a gradient boosting regressor. 
 
 ## Installation Instructions
 A version of Python >= 3.7 is required to use this package. We recommend using [Anaconda](https://www.anaconda.com) to install Python for those new to Python.
