@@ -4,10 +4,12 @@ import category_encoders as ce
 from sklearn.preprocessing import scale
 from matplotlib import pyplot as plt
 from sklearn.model_selection import StratifiedKFold
-from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.decomposition import PCA
+from sklearn.metrics import log_loss
 import seaborn as sns
 import glob
+from sklearn.linear_model import LogisticRegression
 
 
 def motif_fold(folder):
@@ -36,7 +38,7 @@ def motif_fold(folder):
 
     motifs_of_seqs = motifs_from_seqs(num_seqs, motif_length, seqs, motifs)
 
-    CV_predictions, CV_std_predictions = train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, PCA_y, iterations)
+    CV_predictions, CV_std_predictions = train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, iterations)
 
     export_predictions(all_seqs, PCA_y, CV_predictions, CV_std_predictions, folder)
 
@@ -155,42 +157,60 @@ def motifs_from_seqs(num_seqs, motif_length, seqs, motifs):
 
 
 
-def train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit, iterations):
+def train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, iterations):
     print("Beginning cross validation...")
 
     motifs_with_RGB = motifs_of_seqs.copy()
-    motifs_with_RGB["RGB_PCA"] = y_fit
+    motifs_with_RGB["target"] = all_seqs["Colorz"]
     motifs_with_RGB["Hydrophobicity"] = all_seqs["Hydrophobicity"]
 
     skf = StratifiedKFold(n_splits = 5, shuffle = True)
 
+    logloss = []
     predictions = np.zeros((num_seqs, iterations))
 
     for fit in range(iterations):
         if (fit % 10) == 0:
             print("Iteration number ", fit)
+        
+        ll_predictions = np.zeros((num_seqs, 8))
 
         for train_index, test_index in skf.split(motifs_with_RGB, all_seqs["Colorz"]):
             train, test = motifs_with_RGB.iloc[train_index,:], motifs_with_RGB.iloc[test_index,:]
             columns = list(range(0,20 - motif_length + 1))
 
             X = train.iloc[:,columns]
-            y = train["RGB_PCA"]
+            y = train["target"]
             encoder = ce.JamesSteinEncoder().fit(X, y)
             train_enc = encoder.transform(X)
             train_enc["Hydrophobicity"] = train["Hydrophobicity"]
+            # train_enc = train["Hydrophobicity"].to_numpy().reshape(-1,1)
 
-            clf = GradientBoostingRegressor(learning_rate=0.1, max_depth=7, n_estimators = 100, subsample = 0.7)
+            clf = LogisticRegression(multi_class='ovr', solver='lbfgs', max_iter=10000, class_weight='balanced')
+            # clf = GradientBoostingClassifier(learning_rate=0.1, max_depth=7, n_estimators = 100, subsample = 0.7)
             clf.fit(train_enc, y)
+
+            # print(clf.predict(train_enc))
+            # print(y)
 
             test_enc = encoder.transform(test.iloc[:,columns])
             test_enc["Hydrophobicity"] = test["Hydrophobicity"]
-            preds = clf.predict(test_enc)
 
-            predictions[test_index, fit] = preds
+            # test_enc = test["Hydrophobicity"].to_numpy().reshape(-1,1)
+
+            pred_prob = clf.predict_proba(test_enc)
+            ll_predictions[test_index, :] = pred_prob
+            # print(pred_prob)
+
+            predictions[test_index, fit] = clf.predict(test_enc)
+            # print(clf.predict(test_enc))
+        
+        logloss.append(log_loss(all_seqs["Colorz"], ll_predictions))
     
     avg_predictions = np.mean(predictions, axis=1)
     SD_predictions = np.std(predictions, axis=1)
+
+    print("averaged log loss is ", sum(logloss) / len(logloss))
 
     return avg_predictions, SD_predictions
 
@@ -254,3 +274,5 @@ def export_unknowns(predictions, folder):
 
     preds_df = pd.DataFrame(predictions)
     preds_df.to_excel(folder + "/PCA_of_unknowns.xlsx")
+
+motif_fold('/Users/suprajachittari/Documents/GitHub/MotifFold/motif_fold/sample_data')
