@@ -3,6 +3,12 @@
 ## Description
 This Python package was developed by the Knight Lab at UNC Chapel Hill to regress sequence features against an output from a colorimetric assay. It uses a language-inspired "motif" strategy, where sequences are separated into motif features and then regressed using a gradient boosting regressor. 
 
+## Citation
+If you found this tool useful, we would love if you can refer to the following paper:
+Day, E.C.; Chittari, S.S.; Cunha, E.C.; Zhao, J.; Dodds, J.N.; Davis, D.C.; Baker, E.S.; Berlow, R.B.; Shea, J.; Kulkarni, R.U.; Knight, A.S. A High-Throughput Workflow to Analyze Sequence-Conformation Relationships and Explore Hydrophobic Patterning in Disordered Peptoids. ChemRxiv. 2023. DOI: 10.26434/chemrxiv-2023-b84wl
+
+Data for the training set used in this model was collected by Erin C. Day, model conception was by Rishi Kulkarni, and software implementation was by Supraja S. Chittari. Please contact Abigail S. Knight (aknight@unc.edu) with further inquiries. 
+
 ## Installation Instructions
 A version of Python >= 3.7 is required to use this package. We recommend using [Anaconda](https://www.anaconda.com) to install Python for those new to Python.
 1. Open the terminal (MacOS) or Command Prompt (Windows).
