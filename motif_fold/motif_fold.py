@@ -36,17 +36,48 @@ def motif_fold(folder):
             print("Invalid type. Please try again.")
 
     motifs = motif_generation(motif_length)
-
     motifs_of_seqs = motifs_from_seqs(num_seqs, motif_length, seqs, motifs)
+    
+    while True:
+        embedding_input = input("This platform supports three types of embedding of motifs: (1) frequency, (2) one-hot, and (3) James-Stein. Choose one by typing '1', '2', or '3'.")
 
-    motif_freq = motif_freq_embedding(num_seqs, motifs, motifs_of_seqs)
-    # print(motif_freq)
+        try:
+            embedding_choice = int(embedding_input)
+            break
+        except TypeError:
+            print("Invalid selection. Please try again.")
 
-    # CV_predictions, CV_std_predictions = train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, PCA_y, iterations)
+    while True:
+        shap_input = input("Do you want an associated SHAP plot generated over cross-validation? Type 'yes' or 'no'.")
 
-    CV_predictions, CV_std_predictions = freq_embedding(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iterations)
+        if shap_input == "yes":
+            shap_input = True
+            break
+        elif shap_input == "no":
+            shap_input = False
+            break
+        else:
+            print("Invalid selection. Please try again.")
+    
+    if embedding_choice == 1: # frequency embedding
+        motif_freq = motif_freq_embedding(num_seqs, motifs, motifs_of_seqs)
 
-    # CV_predictions, CV_std_predictions = classifier_test(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iterations)
+        if shap_input == True:
+            CV_predictions, CV_std_predictions = freq_embedding_CV(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, 5, True)
+
+        CV_predictions, CV_std_predictions = freq_embedding_CV(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iterations, False)
+
+    elif embedding_choice == 2: # James-Stein embedding
+        if shap_input == True:
+            CV_predictions, CV_std_predictions = JS_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, PCA_y, 5, True)
+
+        CV_predictions, CV_std_predictions = JS_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, PCA_y, iterations, False)
+
+    else: # One-hot embedding
+        if shap_input == True:
+            CV_predictions, CV_std_predictions = onehot_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, PCA_y, 5, True)
+
+        CV_predictions, CV_std_predictions = onehot_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, PCA_y, iterations, False)
 
     export_predictions(all_seqs, PCA_y, CV_predictions, CV_std_predictions, folder)
 
@@ -66,7 +97,15 @@ def motif_fold(folder):
         unknown_preds = input("Is there a file with unknown sequences to predict in this directory? Say 'yes' or 'no': ")
 
         if unknown_preds == "yes":
-            predictions = unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs)
+            if embedding_choice == 1: # frequency
+                predictions = freq_unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs)
+
+            elif embedding_choice == 2: # James-Stein
+                predictions = JS_unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs)
+
+            else: # One-hot encoding
+                predictions = onehot_unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs)
+
             export_unknowns(predictions, folder)
             break
         elif unknown_preds == "no":
@@ -167,8 +206,6 @@ def motif_freq_embedding(num_seqs, motifs, motifs_of_seqs):
     motif_freq = np.zeros((num_seqs, len(motifs[:,1])))
     ints_motifs_seqs = motifs_of_seqs.iloc[:,:-1].astype(float)
 
-    # print(motifs)
-
     for i in range(num_seqs):
         unique, counts = np.unique(ints_motifs_seqs.iloc[i,:], return_counts=True)
         unique = unique.astype(int)
@@ -178,7 +215,7 @@ def motif_freq_embedding(num_seqs, motifs, motifs_of_seqs):
     return motif_freq
 
 
-def train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit, iterations):
+def JS_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit, iterations, shap_plot):
     print("Beginning cross validation...")
 
     existing_descriptors = all_seqs.iloc[:,[6,10]]
@@ -203,8 +240,62 @@ def train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit, itera
             motifs_train, motifs_test = motifs_of_seqs.iloc[train_index,:], motifs_of_seqs.iloc[test_index,:]
             y_train, y_test = y_data[train_index], y_data[test_index]
             
-            # encoder = ce.JamesSteinEncoder().fit(motifs_train, y_train)
-            # motifs_enc = encoder.transform(motifs_train)
+            encoder = ce.JamesSteinEncoder().fit(motifs_train, y_train)
+            motifs_enc = encoder.transform(motifs_train)
+
+            scaler = StandardScaler().fit(existing_train)
+            existing_train_enc = scaler.transform(existing_train)
+
+            X_train = np.hstack((motifs_enc, existing_train_enc))
+
+            clf = GradientBoostingRegressor(learning_rate=0.1, max_depth=7, n_estimators = 100, subsample = 0.7)
+            clf.fit(X_train, y_train)
+
+
+            test_enc = encoder.transform(motifs_test)
+            existing_test_enc = scaler.transform(existing_test)
+            X_test = np.hstack((test_enc, existing_test_enc))
+
+            preds = clf.predict(X_test)
+
+            predictions[test_index, fit] = preds
+
+            if shap_plot == True:
+                explainer = shap.Explainer(clf)
+                explanation = explainer(X_test)
+                shap_values = explanation.values
+
+                shap.plots.beeswarm(explanation)
+    
+    avg_predictions = np.mean(predictions, axis=1)
+    SD_predictions = np.std(predictions, axis=1)
+
+    return avg_predictions, SD_predictions
+
+def onehot_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit, iterations, shap_plot):
+    print("Beginning cross validation...")
+
+    existing_descriptors = all_seqs.iloc[:,[6,10]]
+    y_data = y_fit
+
+    skf = StratifiedKFold(n_splits = 5, shuffle = True)
+
+    predictions = np.zeros((num_seqs, iterations))
+
+    all_categories = []
+    cat_each = np.arange(0, 2**motif_length, 1)
+
+    for i in range(20 - motif_length + 1):
+        all_categories.append(cat_each)
+
+    for fit in range(iterations):
+        if (fit % 10) == 0:
+            print("Iteration number ", fit)
+
+        for train_index, test_index in skf.split(all_seqs, all_seqs["Colorz"]):
+            existing_train, existing_test = existing_descriptors.iloc[train_index,:], existing_descriptors.iloc[test_index,:]
+            motifs_train, motifs_test = motifs_of_seqs.iloc[train_index,:], motifs_of_seqs.iloc[test_index,:]
+            y_train, y_test = y_data[train_index], y_data[test_index]
 
             encoder = OneHotEncoder(categories=all_categories).fit(motifs_train)
             motifs_enc = encoder.transform(motifs_train).toarray()
@@ -212,25 +303,25 @@ def train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit, itera
             scaler = StandardScaler().fit(existing_train)
             existing_train_enc = scaler.transform(existing_train)
 
-            X_train = motifs_enc # np.hstack((motifs_enc, existing_train_enc))
+            X_train = np.hstack((motifs_enc, existing_train_enc))
 
             clf = GradientBoostingRegressor(learning_rate=0.1, max_depth=7, n_estimators = 100, subsample = 0.7)
             clf.fit(X_train, y_train)
 
-
             test_enc = encoder.transform(motifs_test).toarray()
             existing_test_enc = scaler.transform(existing_test)
-            X_test = test_enc #np.hstack((test_enc, existing_test_enc))
+            X_test = np.hstack((test_enc, existing_test_enc))
 
             preds = clf.predict(X_test)
 
             predictions[test_index, fit] = preds
 
-            # explainer = shap.Explainer(clf)
-            # explanation = explainer(X_test)
-            # shap_values = explanation.values
+            if shap_plot == True:
+                explainer = shap.Explainer(clf)
+                explanation = explainer(X_test)
+                shap_values = explanation.values
 
-            # shap.plots.beeswarm(explanation)
+                shap.plots.beeswarm(explanation)
     
     avg_predictions = np.mean(predictions, axis=1)
     SD_predictions = np.std(predictions, axis=1)
@@ -238,7 +329,7 @@ def train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit, itera
     return avg_predictions, SD_predictions
 
 
-def freq_embedding(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iterations):
+def freq_embedding_CV(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iterations, shap_plot):
     print("Beginning cross validation...")
 
     existing_descriptors = all_seqs.iloc[:,[6,8,10]]
@@ -273,70 +364,15 @@ def freq_embedding(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iteratio
             preds = clf.predict(X_test)
 
             predictions[test_index, fit] = preds
-
-            # explainer = shap.Explainer(clf)
-            # explanation = explainer(X_test)
-            # shap_values = explanation.values
-
-            shap.plots.beeswarm(explanation, s=40, show=False)
-            plt.savefig("shap" + str(idx) + ".pdf")
-            plt.close()
-            idx += 1
+            
+            if shap_plot == True:
+                explainer = shap.Explainer(clf)
+                explanation = explainer(X_test)
+                shap_values = explanation.values
+                shap.plots.beeswarm(explanation)
     
     avg_predictions = np.mean(predictions, axis=1)
     SD_predictions = np.std(predictions, axis=1)
-
-    return avg_predictions, SD_predictions
-
-def classifier_test(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iterations):
-    print("Beginning cross validation...")
-
-    existing_descriptors = all_seqs.iloc[:,[6,8,10]]
-    y_data = all_seqs["Colorz"]
-
-    skf = StratifiedKFold(n_splits = 5, shuffle = True)
-
-    predictions = np.zeros((num_seqs, iterations))
-
-    idx = 0
-    logloss = []
-
-    for fit in range(iterations):
-        if (fit % 10) == 0:
-            print("Iteration number ", fit)
-
-        ll_predictions = np.zeros((num_seqs, 8))
-
-        for train_index, test_index in skf.split(all_seqs, all_seqs["Colorz"]):
-            existing_train, existing_test = existing_descriptors.iloc[train_index,:], existing_descriptors.iloc[test_index,:]
-            motifs_train, motifs_test = motif_freq[train_index,:], motif_freq[test_index,:]
-            y_train, y_test = y_data.iloc[train_index], y_data.iloc[test_index]
-                
-            scaler = StandardScaler().fit(existing_train)
-            existing_train_enc = scaler.transform(existing_train)
-
-            X_train = motifs_train #np.hstack((motifs_train, existing_train_enc))
-
-            clf = GradientBoostingClassifier(learning_rate=0.1, max_depth=7, n_estimators = 100, subsample = 0.7)
-            clf.fit(X_train, y_train)
-
-            existing_test_enc = scaler.transform(existing_test)
-            X_test = motifs_test #np.hstack((motifs_test, existing_test_enc))
-
-            predictions[test_index, fit] = clf.predict(X_test)
-
-            pred_prob = clf.predict_proba(X_test)
-            ll_predictions[test_index, :] = pred_prob
-            # print(pred_prob)
-
-            # print(clf.predict(test_enc))
-        
-        logloss.append(log_loss(all_seqs["Colorz"], ll_predictions))
-    
-    avg_predictions = np.mean(predictions, axis=1)
-    SD_predictions = np.std(predictions, axis=1)
-
-    print("averaged log loss is ", sum(logloss) / len(logloss))
 
     return avg_predictions, SD_predictions
 
@@ -368,28 +404,98 @@ def RMSE_box_plot(predictions, PCA_y, all_seqs, folder):
     plt.savefig(folder + "/scatter_boxplot.pdf",dpi=300)
 
 
-
-
-def unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs):
+def freq_unknown_predictions(folder, motif_freq, motif_length, motifs, PCA_y, all_seqs):
     print("Fitting unknown sequences to model...")
+    existing_descriptors = all_seqs.iloc[:,[6,8,10]]
 
-    full_encoder = ce.JamesSteinEncoder().fit(motifs_of_seqs, PCA_y)
-    train_encoded = full_encoder.transform(motifs_of_seqs, PCA_y)
-    train_encoded["Hydrophobicity"] = all_seqs["Hydrophobicity"]
+    scaler = StandardScaler().fit(existing_descriptors)
+    existing_train_enc = scaler.transform(existing_descriptors)
 
-    clf = GradientBoostingRegressor(learning_rate=0.1, max_depth=7, n_estimators=100, subsample= 0.7)
-    clf.fit(train_encoded, PCA_y)
+    X_train = np.hstack((motif_freq, existing_train_enc))
+
+    clf = GradientBoostingRegressor(learning_rate=0.1, max_depth=7, n_estimators = 100, subsample = 0.7)
+    clf.fit(X_train, PCA_y)
 
     # read in your sequences
     unknown_seq_df, unknown_seqs, num_unknown = read_unknown_from_file(folder)
+    unknown_descriptors = unknown_seq_df.iloc[:,[6,8,10]]
+
+    # motifs of unknowns
+    motifs_unknowns = motifs_from_seqs(num_unknown, motif_length, unknown_seqs, motifs)
+    unknown_freq = motif_freq_embedding(unknown_seqs, motifs, motifs_unknowns)
+
+    scaled_descriptors = scaler.transform(unknown_descriptors)
+
+    X_test = np.hstack((unknown_freq, scaled_descriptors))
+
+    # these numbers will be the PCA values. Use the table exported in line 76 to back out which PCA number corresponds to which color group
+    preds = clf.predict(X_test)
+
+    return preds
+
+
+def onehot_unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs):
+    print("Fitting unknown sequences to model...")
+    existing_descriptors = all_seqs.iloc[:,[6,8,10]]
+        
+    encoder = OneHotEncoder(categories=all_categories).fit(motifs_of_seqs)
+    motifs_enc = encoder.transform(motifs_of_seqs).toarray()
+
+    scaler = StandardScaler().fit(existing_descriptors)
+    existing_train_enc = scaler.transform(existing_descriptors)
+
+    X_train = np.hstack((motifs_enc, existing_train_enc))
+
+    clf = GradientBoostingRegressor(learning_rate=0.1, max_depth=7, n_estimators = 100, subsample = 0.7)
+    clf.fit(X_train, PCA_y)
+
+    # read in your sequences
+    unknown_seq_df, unknown_seqs, num_unknown = read_unknown_from_file(folder)
+    unknown_descriptors = unknown_seq_df.iloc[:,[6,8,10]]
+
+    # motifs of unknowns
+    motifs_unknowns = motifs_from_seqs(num_unknown, motif_length, unknown_seqs, motifs)
+    encoded_unknowns = encoder.transform(motifs_unknowns).toarray()
+
+    scaled_descriptors = scaler.transform(unknown_descriptors)
+
+    X_test = np.hstack((encoded_unknowns, scaled_descriptors))
+
+    # these numbers will be the PCA values. Use the table exported in line 76 to back out which PCA number corresponds to which color group
+    preds = clf.predict(X_test)
+
+    return preds
+
+
+def JS_unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs):
+    print("Fitting unknown sequences to model...")
+    existing_descriptors = all_seqs.iloc[:,[6,8,10]]
+
+    full_encoder = ce.JamesSteinEncoder().fit(motifs_of_seqs, PCA_y)
+    train_encoded = full_encoder.transform(motifs_of_seqs, PCA_y)
+
+    scaler = StandardScaler().fit(existing_descriptors)
+    existing_train_enc = scaler.transform(existing_descriptors)
+
+    X_train = np.hstack((train_encoded, existing_train_enc))
+
+    clf = GradientBoostingRegressor(learning_rate=0.1, max_depth=7, n_estimators=100, subsample= 0.7)
+    clf.fit(X_train, PCA_y)
+
+    # read in your sequences
+    unknown_seq_df, unknown_seqs, num_unknown = read_unknown_from_file(folder)
+    unknown_descriptors = unknown_seq_df.iloc[:,[6,8,10]]
 
     # motifs of unknowns
     motifs_unknowns = motifs_from_seqs(num_unknown, motif_length, unknown_seqs, motifs)
     encoded_unknowns = full_encoder.transform(motifs_unknowns)
-    encoded_unknowns["Hydrophobicity"] = unknown_seq_df["Hydrophobicity"]
+
+    scaled_descriptors = scaler.transform(unknown_descriptors)
+
+    X_test = np.hstack((encoded_unknowns, scaled_descriptors))
 
     # these numbers will be the PCA values. Use the table exported in line 76 to back out which PCA number corresponds to which color group
-    predictions = clf.predict(encoded_unknowns) 
+    predictions = clf.predict(X_test) 
 
     return predictions
 
