@@ -39,7 +39,7 @@ def motif_fold(folder):
     motifs_of_seqs = motifs_from_seqs(num_seqs, motif_length, seqs, motifs)
     
     while True:
-        embedding_input = input("This platform supports three types of embedding of motifs: (1) frequency, (2) one-hot, and (3) James-Stein. Choose one by typing '1', '2', or '3'.")
+        embedding_input = input("This platform supports three types of embedding of motifs: (1) frequency, (2) one-hot, and (3) James-Stein. Choose one by typing '1', '2', or '3': ")
 
         try:
             embedding_choice = int(embedding_input)
@@ -48,7 +48,7 @@ def motif_fold(folder):
             print("Invalid selection. Please try again.")
 
     while True:
-        shap_input = input("Do you want an associated SHAP plot generated over cross-validation? Type 'yes' or 'no'.")
+        shap_input = input("Do you want an associated SHAP plot generated over cross-validation? Type 'yes' or 'no': ")
 
         if shap_input == "yes":
             shap_input = True
@@ -67,7 +67,7 @@ def motif_fold(folder):
 
         CV_predictions, CV_std_predictions = freq_embedding_CV(num_seqs, motif_freq, motif_length, all_seqs, PCA_y, iterations, False)
 
-    elif embedding_choice == 2: # James-Stein embedding
+    elif embedding_choice == 3: # James-Stein embedding
         if shap_input == True:
             CV_predictions, CV_std_predictions = JS_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, PCA_y, 5, True)
 
@@ -283,7 +283,7 @@ def onehot_train_test_cv(num_seqs, motifs_of_seqs, motif_length, all_seqs, y_fit
     predictions = np.zeros((num_seqs, iterations))
 
     all_categories = []
-    cat_each = np.arange(0, 2**motif_length, 1)
+    cat_each = np.arange(0, 2**motif_length, 1).astype(str)
 
     for i in range(20 - motif_length + 1):
         all_categories.append(cat_each)
@@ -437,6 +437,12 @@ def freq_unknown_predictions(folder, motif_freq, motif_length, motifs, PCA_y, al
 def onehot_unknown_predictions(folder, motifs_of_seqs, motif_length, motifs, PCA_y, all_seqs):
     print("Fitting unknown sequences to model...")
     existing_descriptors = all_seqs.iloc[:,[6,8,10]]
+
+    all_categories = []
+    cat_each = np.arange(0, 2**motif_length, 1).astype(str)
+
+    for i in range(20 - motif_length + 1):
+        all_categories.append(cat_each)
         
     encoder = OneHotEncoder(categories=all_categories).fit(motifs_of_seqs)
     motifs_enc = encoder.transform(motifs_of_seqs).toarray()
